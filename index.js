@@ -1,174 +1,637 @@
-import express from 'express';
-import axios from 'axios';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const express = require("express");
 
 const app = express();
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: "50kb" }));
 
-const PORT = Number(process.env.PORT || 8080);
-const TOKEN = process.env.WEBHOOK_TOKEN || '';
-const TE_KEY = process.env.TRADING_ECONOMICS_API_KEY || '';
+const PORT = process.env.PORT || 10000;
+
+const CALENDAR_BASE_URL =
+  process.env.CALENDAR_BASE_URL ||
+  "https://economic-calendar-api-h9hr.onrender.com";
+
+const NEWS_WINDOW_MIN = Number(process.env.NEWS_WINDOW_MIN || 90);
 const POLL_SECONDS = Number(process.env.POLL_SECONDS || 30);
-const LOOKAHEAD_MINUTES = Number(process.env.LOOKAHEAD_MINUTES || 180);
-const RECENT_MINUTES = Number(process.env.RECENT_MINUTES || 45);
-const MIN_IMPORTANCE = Number(process.env.MIN_IMPORTANCE || 2);
-const COUNTRIES = (process.env.COUNTRIES || 'United States').split(',').map(x => x.trim()).filter(Boolean);
 
 let calendar = [];
-let lastRefresh = null;
-let lastRefreshError = null;
-let lastSignals = [];
+let lastUpdate = null;
+let lastError = null;
 
-function isoDate(d) { return d.toISOString().slice(0, 10); }
+const USA_KEYWORDS = [
+  "fomc",
+  "fed",
+  "federal reserve",
+  "interest rate",
+  "cpi",
+  "core cpi",
+  "ppi",
+  "core ppi",
+  "non farm",
+  "nonfarm",
+  "payroll",
+  "unemployment",
+  "jobless",
+  "retail sales",
+  "gdp",
+  "pce",
+  "core pce",
+  "ism",
+  "consumer confidence",
+  "jolts",
+  "adp",
+  "powell",
+  "fed chair",
+  "treasury",
+  "durable goods",
+  "housing",
+  "existing home sales",
+  "new home sales",
+  "initial jobless claims",
+  "continuing jobless claims"
+];
 
-function parseDate(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function cleanNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const s = String(value).replace(/,/g, '').replace(/%/g, '').trim();
-  const m = s.match(/[-+]?\d+(?:\.\d+)?/);
-  return m ? Number(m[0]) : null;
-}
-
-function eventDirection(event) {
-  const name = `${event.Event || ''} ${event.Category || ''}`.toLowerCase();
-  const actual = cleanNumber(event.Actual);
-  const forecast = cleanNumber(event.Forecast ?? event.TEForecast);
-  if (actual === null || forecast === null) return { bias: 0, surprise: null, reason: 'Sin actual/forecast' };
-  const diff = actual - forecast;
-  if (Math.abs(diff) < 1e-12) return { bias: 0, surprise: 0, reason: 'En línea con forecast' };
-
-  // For XAUUSD: stronger USD macro data is generally bearish for gold;
-  // weaker USD data is generally bullish. This is intentionally used only
-  // to CONFIRM/WEAKEN an already-existing Luzifer BUY/SELL.
-  const lowerIsBullGold = [
-    'inflation', 'cpi', 'consumer price', 'ppi', 'producer price',
-    'interest rate', 'fed', 'policy rate', 'retail sales', 'gdp',
-    'manufacturing pmi', 'services pmi', 'composite pmi', 'consumer confidence',
-    'business confidence', 'durable goods', 'industrial production', 'ism'
-  ];
-  const higherIsBullGold = [
-    'unemployment', 'jobless claims'
-  ];
-
-  let goldBias = 0;
-  if (higherIsBullGold.some(k => name.includes(k))) {
-    goldBias = diff > 0 ? 1 : -1;
-  } else if (name.includes('non farm') || name.includes('payroll')) {
-    goldBias = diff < 0 ? 1 : -1;
-  } else if (lowerIsBullGold.some(k => name.includes(k))) {
-    goldBias = diff < 0 ? 1 : -1;
-  }
-
-  return { bias: goldBias, surprise: diff, reason: goldBias > 0 ? 'Dato favorece oro' : goldBias < 0 ? 'Dato favorece USD / presiona oro' : 'Sin sesgo configurado' };
-}
-
-async function refreshCalendar() {
-  if (!TE_KEY) {
-    lastRefreshError = 'Falta TRADING_ECONOMICS_API_KEY';
-    return;
-  }
-  try {
-    const now = new Date();
-    const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const rows = [];
-    for (const country of COUNTRIES) {
-      const url = `https://api.tradingeconomics.com/calendar/country/${encodeURIComponent(country)}/${isoDate(now)}/${isoDate(end)}?c=${encodeURIComponent(TE_KEY)}&f=json`;
-      const r = await axios.get(url, { timeout: 8000 });
-      if (Array.isArray(r.data)) rows.push(...r.data);
+function pick(obj, names) {
+  for (const name of names) {
+    if (
+      obj &&
+      obj[name] !== undefined &&
+      obj[name] !== null
+    ) {
+      return obj[name];
     }
-    calendar = rows.filter(e => Number(e.Importance || 0) >= MIN_IMPORTANCE);
-    lastRefresh = new Date().toISOString();
-    lastRefreshError = null;
-  } catch (err) {
-    lastRefreshError = err?.response?.data || err.message;
   }
+
+  return null;
 }
 
-function relevantEvents() {
-  const now = Date.now();
-  const from = now - RECENT_MINUTES * 60_000;
-  const to = now + LOOKAHEAD_MINUTES * 60_000;
-  return calendar
-    .map(e => ({ e, date: parseDate(e.Date) }))
-    .filter(x => x.date && x.date.getTime() >= from && x.date.getTime() <= to)
-    .sort((a, b) => Math.abs(a.date - now) - Math.abs(b.date - now));
+function num(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const n = Number(
+    String(value)
+      .replace(/,/g, "")
+      .replace("%", "")
+  );
+
+  return Number.isFinite(n) ? n : null;
 }
 
-function evaluateSignal(signal) {
-  const action = signal.action;
-  const now = Date.now();
-  const events = relevantEvents();
-  const scored = events.map(({ e, date }) => {
-    const mins = (date.getTime() - now) / 60000;
-    const released = mins <= 0;
-    const direction = released ? eventDirection(e) : { bias: 0, surprise: null, reason: 'Evento futuro' };
-    const weight = Math.max(1, Number(e.Importance || 1));
-    return {
-      event: e.Event,
-      category: e.Category,
-      country: e.Country,
-      currency: e.Currency || (String(e.Country || '').toLowerCase().includes('united states') ? 'USD' : ''),
-      importance: Number(e.Importance || 0),
-      time: e.Date,
-      minutesFromNow: Number(mins.toFixed(1)),
-      actual: e.Actual ?? null,
-      forecast: e.Forecast ?? e.TEForecast ?? null,
-      previous: e.Previous ?? null,
-      surprise: direction.surprise,
-      goldBias: direction.bias,
-      reason: direction.reason,
-      released
-    };
-  });
+function importance(value) {
+  if (typeof value === "number") {
+    return value;
+  }
 
-  const released = scored.filter(x => x.released && x.goldBias !== 0);
-  const upcomingHigh = scored.filter(x => !x.released && x.importance >= 3).sort((a,b) => a.minutesFromNow-b.minutesFromNow)[0] || null;
-  const recentHigh = released.filter(x => x.importance >= 3).sort((a,b) => Math.abs(a.minutesFromNow)-Math.abs(b.minutesFromNow))[0] || null;
+  const s = String(value ?? "").toLowerCase();
 
-  let newsScore = 0;
-  for (const e of released.slice(0, 10)) newsScore += e.goldBias * e.importance;
+  if (
+    s.includes("high") ||
+    s.includes("red")
+  ) {
+    return 3;
+  }
 
-  let confirmation = 'NEUTRAL';
-  if (action === 'BUY' && newsScore > 0) confirmation = 'CONFIRMED';
-  if (action === 'BUY' && newsScore < 0) confirmation = 'CONTRARY';
-  if (action === 'SELL' && newsScore < 0) confirmation = 'CONFIRMED';
-  if (action === 'SELL' && newsScore > 0) confirmation = 'CONTRARY';
+  if (
+    s.includes("medium") ||
+    s.includes("orange")
+  ) {
+    return 2;
+  }
 
+  if (
+    s.includes("low") ||
+    s.includes("yellow")
+  ) {
+    return 1;
+  }
+
+  const n = Number(value);
+
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalize(event) {
   return {
-    action,
-    symbol: signal.symbol,
-    price: signal.price,
-    confirmation,
-    newsScore,
-    upcomingHighImpact: upcomingHigh,
-    recentHighImpact: recentHigh,
-    events: scored.slice(0, 10),
-    generatedAt: new Date().toISOString(),
-    note: 'Las noticias confirman o debilitan una señal existente; no generan BUY/SELL.'
+    date: pick(event, [
+      "date",
+      "Date",
+      "datetime",
+      "Datetime",
+      "time",
+      "Time"
+    ]),
+
+    country:
+      pick(event, [
+        "country",
+        "Country",
+        "country_code",
+        "CountryCode"
+      ]) || "United States",
+
+    currency:
+      pick(event, [
+        "currency",
+        "Currency"
+      ]) || "USD",
+
+    event:
+      pick(event, [
+        "event",
+        "Event",
+        "title",
+        "Title",
+        "name",
+        "Name",
+        "category",
+        "Category"
+      ]) || "",
+
+    actual: pick(event, [
+      "actual",
+      "Actual"
+    ]),
+
+    forecast: pick(event, [
+      "forecast",
+      "Forecast",
+      "consensus",
+      "Consensus"
+    ]),
+
+    previous: pick(event, [
+      "previous",
+      "Previous"
+    ]),
+
+    importance: importance(
+      pick(event, [
+        "importance",
+        "Importance",
+        "impact",
+        "Impact"
+      ])
+    )
   };
 }
 
-app.get('/health', (_req, res) => res.json({ ok: true, lastRefresh, lastRefreshError, events: calendar.length }));
-app.get('/api/status', (_req, res) => res.json({ lastRefresh, lastRefreshError, events: relevantEvents().slice(0, 20), lastSignals }));
+function unwrap(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
 
-app.post('/webhook/tradingview', (req, res) => {
-  if (!TOKEN || req.body?.token !== TOKEN) return res.status(401).json({ ok: false, error: 'Invalid token' });
-  const result = evaluateSignal(req.body);
-  lastSignals.unshift(result);
-  lastSignals = lastSignals.slice(0, 20);
-  console.log(JSON.stringify(result));
-  res.json({ ok: true, ...result });
+  if (Array.isArray(data?.events)) {
+    return data.events;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  if (Array.isArray(data?.results)) {
+    return data.results;
+  }
+
+  return [];
+}
+
+function isUSA(event) {
+  const country =
+    String(event.country || "").toLowerCase();
+
+  const currency =
+    String(event.currency || "").toUpperCase();
+
+  return (
+    country.includes("united states") ||
+    country === "usa" ||
+    country === "us" ||
+    currency === "USD"
+  );
+}
+
+function isRelevant(event) {
+  const name =
+    String(event.event || "").toLowerCase();
+
+  return USA_KEYWORDS.some(
+    keyword => name.includes(keyword)
+  );
+}
+
+function eventTime(value) {
+  const t = Date.parse(value);
+
+  return Number.isFinite(t) ? t : NaN;
+}
+
+async function fetchCalendar() {
+  try {
+    const urls = [
+      `${CALENDAR_BASE_URL}/events?country=USA`,
+      `${CALENDAR_BASE_URL}/events?country=USA&impact=HIGH`,
+      `${CALENDAR_BASE_URL}/events?country=USA&impact=MEDIUM`
+    ];
+
+    const responses = await Promise.all(
+      urls.map(async url => {
+        const response = await fetch(
+          url,
+          {
+            headers: {
+              Accept: "application/json"
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Calendar HTTP ${response.status}`
+          );
+        }
+
+        return response.json();
+      })
+    );
+
+    const merged = responses
+      .flatMap(unwrap)
+      .map(normalize)
+      .filter(isUSA)
+      .filter(isRelevant);
+
+    const seen = new Set();
+
+    calendar = merged.filter(event => {
+      const key = [
+        event.date,
+        event.event,
+        event.currency,
+        event.actual,
+        event.forecast,
+        event.previous
+      ].join("|");
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+
+      return true;
+    });
+
+    lastUpdate =
+      new Date().toISOString();
+
+    lastError = null;
+
+  } catch (error) {
+
+    lastError = error.message;
+  }
+}
+
+function upcomingNews() {
+  const now = Date.now();
+
+  const end =
+    now +
+    NEWS_WINDOW_MIN * 60 * 1000;
+
+  return calendar
+    .filter(event => {
+      const t =
+        eventTime(event.date);
+
+      return (
+        Number.isFinite(t) &&
+        t >= now &&
+        t <= end
+      );
+    })
+    .sort(
+      (a, b) =>
+        eventTime(a.date) -
+        eventTime(b.date)
+    );
+}
+
+function recentNews() {
+  const now = Date.now();
+
+  const start =
+    now -
+    NEWS_WINDOW_MIN * 60 * 1000;
+
+  return calendar
+    .filter(event => {
+      const t =
+        eventTime(event.date);
+
+      return (
+        Number.isFinite(t) &&
+        t >= start &&
+        t <= now
+      );
+    })
+    .sort(
+      (a, b) =>
+        eventTime(b.date) -
+        eventTime(a.date)
+    );
+}
+
+function direction(
+  event,
+  actual,
+  forecast
+) {
+  const name =
+    String(event || "").toLowerCase();
+
+  const a = num(actual);
+  const f = num(forecast);
+
+  if (
+    a === null ||
+    f === null
+  ) {
+    return "UNKNOWN";
+  }
+
+  const usdPositive = [
+    "non farm",
+    "nonfarm",
+    "payroll",
+    "retail sales",
+    "gdp",
+    "ism",
+    "adp",
+    "consumer confidence",
+    "durable goods"
+  ].some(
+    keyword =>
+      name.includes(keyword)
+  );
+
+  const usdNegative = [
+    "unemployment",
+    "jobless claims",
+    "initial jobless",
+    "continuing jobless"
+  ].some(
+    keyword =>
+      name.includes(keyword)
+  );
+
+  if (usdPositive) {
+
+    if (a > f) {
+      return "USD_BULLISH";
+    }
+
+    if (a < f) {
+      return "USD_BEARISH";
+    }
+
+    return "NEUTRAL";
+  }
+
+  if (usdNegative) {
+
+    if (a < f) {
+      return "USD_BULLISH";
+    }
+
+    if (a > f) {
+      return "USD_BEARISH";
+    }
+
+    return "NEUTRAL";
+  }
+
+  return "UNKNOWN";
+}
+
+function evaluateSignal(signal) {
+
+  const s =
+    String(signal || "").toUpperCase();
+
+  const recent =
+    recentNews().slice(0, 10);
+
+  const upcoming =
+    upcomingNews().slice(0, 10);
+
+  let score = 0;
+
+  const reasons = [];
+
+  for (const event of recent) {
+
+    const dir = direction(
+      event.event,
+      event.actual,
+      event.forecast
+    );
+
+    if (s === "BUY") {
+
+      if (dir === "USD_BEARISH") {
+
+        score += 2;
+
+        reasons.push(
+          `${event.event}: USD débil / favorece BUY`
+        );
+
+      } else if (
+        dir === "USD_BULLISH"
+      ) {
+
+        score -= 2;
+
+        reasons.push(
+          `${event.event}: USD fuerte / contrario a BUY`
+        );
+      }
+    }
+
+    if (s === "SELL") {
+
+      if (dir === "USD_BULLISH") {
+
+        score += 2;
+
+        reasons.push(
+          `${event.event}: USD fuerte / favorece SELL`
+        );
+
+      } else if (
+        dir === "USD_BEARISH"
+      ) {
+
+        score -= 2;
+
+        reasons.push(
+          `${event.event}: USD débil / contrario a SELL`
+        );
+      }
+    }
+  }
+
+  let confirmation =
+    "NEUTRAL";
+
+  if (score >= 2) {
+    confirmation =
+      "CONFIRMA";
+  }
+
+  if (score <= -2) {
+    confirmation =
+      "CONTRARIA";
+  }
+
+  return {
+
+    signal: s,
+
+    confirmation,
+
+    score,
+
+    reasons,
+
+    upcomingHighImpact:
+      upcoming.filter(
+        event =>
+          event.importance >= 3
+      ),
+
+    recentNews: recent
+  };
+}
+
+app.get("/", (_req, res) => {
+
+  res.json({
+
+    service:
+      "Luzifer 5.8 USA Live News Engine",
+
+    status:
+      "running",
+
+    source:
+      "public economic calendar",
+
+    country:
+      "United States",
+
+    currency:
+      "USD",
+
+    lastUpdate,
+
+    lastError
+  });
 });
 
-app.listen(PORT, async () => {
-  console.log(`Luzifer 5.8 News Engine listening on :${PORT}`);
-  await refreshCalendar();
-  setInterval(refreshCalendar, POLL_SECONDS * 1000);
-});
+app.get(
+  "/health",
+  (_req, res) => {
+
+    res.json({
+
+      ok: true,
+
+      lastUpdate,
+
+      lastError
+    });
+  }
+);
+
+app.get(
+  "/news",
+  (_req, res) => {
+
+    res.json({
+
+      country:
+        "United States",
+
+      currency:
+        "USD",
+
+      updatedAt:
+        lastUpdate,
+
+      upcoming:
+        upcomingNews(),
+
+      recent:
+        recentNews(),
+
+      error:
+        lastError
+    });
+  }
+);
+
+app.post(
+  "/webhook",
+  (req, res) => {
+
+    const payload =
+      req.body || {};
+
+    const signal =
+      payload.signal ||
+      payload.action ||
+      "";
+
+    const result =
+      evaluateSignal(signal);
+
+    res.json({
+
+      ok: true,
+
+      indicator:
+        "Luzifer 5.8",
+
+      signal,
+
+      news:
+        result
+    });
+  }
+);
+
+app.listen(
+  PORT,
+  async () => {
+
+    console.log(
+      `Luzifer USA News Engine listening on ${PORT}`
+    );
+
+    await fetchCalendar();
+
+    setInterval(
+      fetchCalendar,
+      Math.max(
+        POLL_SECONDS,
+        15
+      ) * 1000
+    );
+  }
+);
