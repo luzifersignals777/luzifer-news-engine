@@ -1035,43 +1035,35 @@ function evaluateSignal(signal) {
       signal || ""
     ).toUpperCase();
 
-
   const recent =
     recentNews()
       .slice(0, 10);
-
 
   const upcoming =
     upcomingNews()
       .slice(0, 10);
 
-
   let score = 0;
-
 
   const reasons = [];
 
-
+  // =====================================================
+  // CONFIRMACION POR NOTICIAS RECIENTES
+  // =====================================================
   for (
     const event of recent
   ) {
 
     const dir =
       direction(
-
         event.event,
-
         event.actual,
-
         event.forecast
-
       );
-
 
     // ================================================
     // BUY DE LUZIFER
     // ================================================
-
     if (s === "BUY") {
 
       if (
@@ -1081,15 +1073,11 @@ function evaluateSignal(signal) {
 
         score += 2;
 
-
         reasons.push(
-
-          `${event.event}: USD débil / favorece BUY`
-
+          `${event.event}: USD debil / favorece BUY`
         );
 
       }
-
 
       else if (
         dir ===
@@ -1098,22 +1086,17 @@ function evaluateSignal(signal) {
 
         score -= 2;
 
-
         reasons.push(
-
           `${event.event}: USD fuerte / contrario a BUY`
-
         );
 
       }
 
     }
 
-
     // ================================================
     // SELL DE LUZIFER
     // ================================================
-
     if (s === "SELL") {
 
       if (
@@ -1123,15 +1106,11 @@ function evaluateSignal(signal) {
 
         score += 2;
 
-
         reasons.push(
-
           `${event.event}: USD fuerte / favorece SELL`
-
         );
 
       }
-
 
       else if (
         dir ===
@@ -1140,11 +1119,8 @@ function evaluateSignal(signal) {
 
         score -= 2;
 
-
         reasons.push(
-
-          `${event.event}: USD débil / contrario a SELL`
-
+          `${event.event}: USD debil / contrario a SELL`
         );
 
       }
@@ -1153,10 +1129,67 @@ function evaluateSignal(signal) {
 
   }
 
+  // =====================================================
+  // CONFIRMACION DXY
+  // DXY NO CREA LA SEÑAL; SOLO CONFIRMA O CONTRADICE
+  // =====================================================
+  const assetContext =
+    evaluateAssets();
+
+  const dxyState =
+    assetContext?.DXY?.state ||
+    "NEUTRAL";
+
+  if (s === "BUY") {
+
+    if (dxyState === "DESFAVORABLE") {
+
+      score += 1;
+
+      reasons.push(
+        "DXY debil / confirma BUY"
+      );
+
+    }
+
+    else if (dxyState === "FAVORABLE") {
+
+      score -= 1;
+
+      reasons.push(
+        "DXY fuerte / contradice BUY"
+      );
+
+    }
+
+  }
+
+  if (s === "SELL") {
+
+    if (dxyState === "FAVORABLE") {
+
+      score += 1;
+
+      reasons.push(
+        "DXY fuerte / confirma SELL"
+      );
+
+    }
+
+    else if (dxyState === "DESFAVORABLE") {
+
+      score -= 1;
+
+      reasons.push(
+        "DXY debil / contradice SELL"
+      );
+
+    }
+
+  }
 
   let confirmation =
     "NEUTRAL";
-
 
   if (score >= 2) {
 
@@ -1165,14 +1198,12 @@ function evaluateSignal(signal) {
 
   }
 
-
   if (score <= -2) {
 
     confirmation =
       "CONTRARIA";
 
   }
-
 
   return {
 
@@ -1181,6 +1212,28 @@ function evaluateSignal(signal) {
     confirmation,
 
     score,
+
+    dxy: {
+      state: dxyState,
+      effect:
+        s === "BUY"
+          ? (
+              dxyState === "DESFAVORABLE"
+                ? "CONFIRMA_BUY"
+                : dxyState === "FAVORABLE"
+                  ? "CONTRADICE_BUY"
+                  : "NEUTRAL"
+            )
+          : s === "SELL"
+            ? (
+                dxyState === "FAVORABLE"
+                  ? "CONFIRMA_SELL"
+                  : dxyState === "DESFAVORABLE"
+                    ? "CONTRADICE_SELL"
+                    : "NEUTRAL"
+              )
+            : "NEUTRAL"
+    },
 
     reasons,
 
