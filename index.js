@@ -60,6 +60,180 @@ const USA_KEYWORDS = [
 
 
 // =====================================================
+// ACTIVOS: USD / ORO / WTI / BTC
+// =====================================================
+
+const GOLD_KEYWORDS = [
+  "gold",
+  "bullion",
+  "precious metal",
+  "safe haven",
+  "real yields"
+];
+
+const WTI_KEYWORDS = [
+  "oil",
+  "crude",
+  "wti",
+  "brent",
+  "opec",
+  "supply",
+  "inventory",
+  "production",
+  "energy"
+];
+
+const BTC_KEYWORDS = [
+  "bitcoin",
+  "btc",
+  "crypto",
+  "cryptocurrency",
+  "digital asset",
+  "digital assets",
+  "crypto market"
+];
+
+function containsAny(name, keywords) {
+  return keywords.some(keyword => name.includes(keyword));
+}
+
+function assetFromEvent(event) {
+  const name = String(event.event || "").toLowerCase();
+
+  const assets = ["USD"];
+
+  if (containsAny(name, GOLD_KEYWORDS)) {
+    assets.push("ORO");
+  }
+
+  if (containsAny(name, WTI_KEYWORDS)) {
+    assets.push("WTI");
+  }
+
+  if (containsAny(name, BTC_KEYWORDS)) {
+    assets.push("BTC");
+  }
+
+  return assets;
+}
+
+function assetState(score) {
+  if (score > 0) return "FAVORABLE";
+  if (score < 0) return "DESFAVORABLE";
+  return "NEUTRAL";
+}
+
+function evaluateAssets() {
+  const recent = recentNews().slice(0, 20);
+
+  const scores = {
+    USD: 0,
+    ORO: 0,
+    WTI: 0,
+    BTC: 0
+  };
+
+  const reasons = {
+    USD: [],
+    ORO: [],
+    WTI: [],
+    BTC: []
+  };
+
+  for (const event of recent) {
+    const dir = direction(
+      event.event,
+      event.actual,
+      event.forecast
+    );
+
+    if (dir === "UNKNOWN") {
+      continue;
+    }
+
+    const assets = assetFromEvent(event);
+    const name = String(event.event || "Noticia").trim();
+
+    if (dir === "USD_BULLISH") {
+      scores.USD += 1;
+      reasons.USD.push(`${name}: USD fuerte`);
+    }
+
+    if (dir === "USD_BEARISH") {
+      scores.USD -= 1;
+      reasons.USD.push(`${name}: USD debil`);
+    }
+
+    if (dir === "USD_BULLISH") {
+      scores.ORO -= 1;
+      reasons.ORO.push(`${name}: presion por USD fuerte`);
+    }
+
+    if (dir === "USD_BEARISH") {
+      scores.ORO += 1;
+      reasons.ORO.push(`${name}: apoyo por USD debil`);
+    }
+
+    if (assets.includes("WTI")) {
+      if (dir === "USD_BULLISH") {
+        scores.WTI -= 1;
+        reasons.WTI.push(
+          `${name}: USD fuerte puede presionar commodities`
+        );
+      } else if (dir === "USD_BEARISH") {
+        scores.WTI += 1;
+        reasons.WTI.push(
+          `${name}: USD debil puede apoyar commodities`
+        );
+      }
+    }
+
+    if (dir === "USD_BEARISH") {
+      scores.BTC += 1;
+      reasons.BTC.push(
+        `${name}: USD debil / contexto favorable a riesgo`
+      );
+    } else if (dir === "USD_BULLISH") {
+      scores.BTC -= 1;
+      reasons.BTC.push(
+        `${name}: USD fuerte / presion sobre riesgo`
+      );
+    }
+  }
+
+  return {
+    USD: {
+      state: assetState(scores.USD),
+      reason:
+        reasons.USD[0] ||
+        "Sin dato economico reciente suficiente"
+    },
+
+    ORO: {
+      state: assetState(scores.ORO),
+      reason:
+        reasons.ORO[0] ||
+        "Sin dato economico reciente suficiente"
+    },
+
+    WTI: {
+      state: assetState(scores.WTI),
+      reason:
+        reasons.WTI[0] ||
+        "Sin noticia WTI directa suficiente"
+    },
+
+    BTC: {
+      state: assetState(scores.BTC),
+      reason:
+        reasons.BTC[0] ||
+        "Sin dato economico reciente suficiente"
+    }
+  };
+}
+
+
+// =====================================================
 // FUNCIONES AUXILIARES
 // =====================================================
 
@@ -118,7 +292,6 @@ function importance(value) {
   const s =
     String(value ?? "").toLowerCase();
 
-
   if (
     s.includes("high") ||
     s.includes("red")
@@ -127,7 +300,6 @@ function importance(value) {
     return 3;
 
   }
-
 
   if (
     s.includes("medium") ||
@@ -138,7 +310,6 @@ function importance(value) {
 
   }
 
-
   if (
     s.includes("low") ||
     s.includes("yellow")
@@ -147,7 +318,6 @@ function importance(value) {
     return 1;
 
   }
-
 
   const n = Number(value);
 
@@ -251,13 +421,11 @@ function unwrap(data) {
 
   }
 
-
   if (Array.isArray(data?.events)) {
 
     return data.events;
 
   }
-
 
   if (Array.isArray(data?.data)) {
 
@@ -265,13 +433,11 @@ function unwrap(data) {
 
   }
 
-
   if (Array.isArray(data?.results)) {
 
     return data.results;
 
   }
-
 
   return [];
 
@@ -289,12 +455,10 @@ function isUSA(event) {
       event.country || ""
     ).toLowerCase();
 
-
   const currency =
     String(
       event.currency || ""
     ).toUpperCase();
-
 
   return (
 
@@ -323,7 +487,6 @@ function isRelevant(event) {
     String(
       event.event || ""
     ).toLowerCase();
-
 
   return USA_KEYWORDS.some(
     keyword =>
@@ -360,11 +523,9 @@ async function fetchCalendar() {
     const url =
       `${CALENDAR_BASE_URL}/events?country=USA`;
 
-
     console.log(
       "Consultando calendario USA..."
     );
-
 
     const response =
       await fetch(
@@ -380,7 +541,6 @@ async function fetchCalendar() {
 
       );
 
-
     if (!response.ok) {
 
       throw new Error(
@@ -389,10 +549,8 @@ async function fetchCalendar() {
 
     }
 
-
     const data =
       await response.json();
-
 
     const merged =
       unwrap(data)
@@ -403,10 +561,8 @@ async function fetchCalendar() {
 
         .filter(isRelevant);
 
-
     const seen =
       new Set();
-
 
     calendar =
       merged.filter(event => {
@@ -422,13 +578,11 @@ async function fetchCalendar() {
 
         ].join("|");
 
-
         if (seen.has(key)) {
 
           return false;
 
         }
-
 
         seen.add(key);
 
@@ -436,24 +590,19 @@ async function fetchCalendar() {
 
       });
 
-
     lastUpdate =
       new Date().toISOString();
 
-
     lastError = null;
-
 
     console.log(
       `Noticias USA cargadas: ${calendar.length}`
     );
 
-
   } catch (error) {
 
     lastError =
       error.message;
-
 
     console.error(
       "Calendar update error:",
@@ -474,13 +623,11 @@ function upcomingNews() {
   const now =
     Date.now();
 
-
   const end =
     now +
     NEWS_WINDOW_MIN *
     60 *
     1000;
-
 
   return calendar
 
@@ -490,7 +637,6 @@ function upcomingNews() {
         eventTime(
           event.date
         );
-
 
       return (
 
@@ -525,13 +671,11 @@ function recentNews() {
   const now =
     Date.now();
 
-
   const start =
     now -
     NEWS_WINDOW_MIN *
     60 *
     1000;
-
 
   return calendar
 
@@ -541,7 +685,6 @@ function recentNews() {
         eventTime(
           event.date
         );
-
 
       return (
 
@@ -582,14 +725,11 @@ function direction(
       event || ""
     ).toLowerCase();
 
-
   const a =
     num(actual);
 
-
   const f =
     num(forecast);
-
 
   if (
     a === null ||
@@ -600,8 +740,6 @@ function direction(
 
   }
 
-
-  // Datos normalmente USD positivos
   const usdPositive = [
 
     "non farm",
@@ -621,9 +759,6 @@ function direction(
 
   );
 
-
-  // Datos donde un número menor
-  // normalmente significa USD más débil
   const usdNegative = [
 
     "unemployment",
@@ -638,7 +773,6 @@ function direction(
 
   );
 
-
   if (usdPositive) {
 
     if (a > f) {
@@ -647,18 +781,15 @@ function direction(
 
     }
 
-
     if (a < f) {
 
       return "USD_BEARISH";
 
     }
 
-
     return "NEUTRAL";
 
   }
-
 
   if (usdNegative) {
 
@@ -668,18 +799,15 @@ function direction(
 
     }
 
-
     if (a > f) {
 
       return "USD_BEARISH";
 
     }
 
-
     return "NEUTRAL";
 
   }
-
 
   return "UNKNOWN";
 
@@ -697,22 +825,17 @@ function evaluateSignal(signal) {
       signal || ""
     ).toUpperCase();
 
-
   const recent =
     recentNews()
       .slice(0, 10);
-
 
   const upcoming =
     upcomingNews()
       .slice(0, 10);
 
-
   let score = 0;
 
-
   const reasons = [];
-
 
   for (
     const event of recent
@@ -729,7 +852,6 @@ function evaluateSignal(signal) {
 
       );
 
-
     // ================================================
     // BUY DE LUZIFER
     // ================================================
@@ -743,15 +865,13 @@ function evaluateSignal(signal) {
 
         score += 2;
 
-
         reasons.push(
 
-          `${event.event}: USD débil / favorece BUY`
+          `${event.event}: USD debil / favorece BUY`
 
         );
 
       }
-
 
       else if (
         dir ===
@@ -759,7 +879,6 @@ function evaluateSignal(signal) {
       ) {
 
         score -= 2;
-
 
         reasons.push(
 
@@ -770,7 +889,6 @@ function evaluateSignal(signal) {
       }
 
     }
-
 
     // ================================================
     // SELL DE LUZIFER
@@ -785,7 +903,6 @@ function evaluateSignal(signal) {
 
         score += 2;
 
-
         reasons.push(
 
           `${event.event}: USD fuerte / favorece SELL`
@@ -794,7 +911,6 @@ function evaluateSignal(signal) {
 
       }
 
-
       else if (
         dir ===
         "USD_BEARISH"
@@ -802,10 +918,9 @@ function evaluateSignal(signal) {
 
         score -= 2;
 
-
         reasons.push(
 
-          `${event.event}: USD débil / contrario a SELL`
+          `${event.event}: USD debil / contrario a SELL`
 
         );
 
@@ -815,10 +930,8 @@ function evaluateSignal(signal) {
 
   }
 
-
   let confirmation =
     "NEUTRAL";
-
 
   if (score >= 2) {
 
@@ -827,14 +940,12 @@ function evaluateSignal(signal) {
 
   }
 
-
   if (score <= -2) {
 
     confirmation =
       "CONTRARIA";
 
   }
-
 
   return {
 
@@ -947,6 +1058,9 @@ app.get(
       recent:
         recentNews(),
 
+      assets:
+        evaluateAssets(),
+
       error:
         lastError
 
@@ -954,6 +1068,39 @@ app.get(
 
   }
 
+);
+
+
+// =====================================================
+// NEWS DE 4 ACTIVOS + MOTIVO
+// =====================================================
+
+app.get(
+  "/news/assets",
+  (_req, res) => {
+
+    res.json({
+
+      ok: true,
+
+      indicator:
+        "Luzifer 5.8",
+
+      updatedAt:
+        lastUpdate,
+
+      assets:
+        evaluateAssets(),
+
+      recent:
+        recentNews().slice(0, 20),
+
+      error:
+        lastError
+
+    });
+
+  }
 );
 
 
@@ -968,18 +1115,15 @@ app.post(
     const payload =
       req.body || {};
 
-
     const signal =
       payload.signal ||
       payload.action ||
       "";
 
-
     const result =
       evaluateSignal(
         signal
       );
-
 
     res.json({
 
@@ -991,7 +1135,10 @@ app.post(
       signal,
 
       news:
-        result
+        result,
+
+      assets:
+        evaluateAssets()
 
     });
 
@@ -1013,9 +1160,7 @@ app.listen(
       `Luzifer USA News Engine listening on ${PORT}`
     );
 
-
     await fetchCalendar();
-
 
     setInterval(
 
