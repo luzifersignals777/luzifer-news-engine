@@ -20,6 +20,7 @@ let calendar = [];
 let rawCalendar = [];
 let lastUpdate = null;
 let lastError = null;
+let lastWebhook = null;
 
 
 // =====================================================
@@ -1393,18 +1394,30 @@ app.post(
     const payload =
       req.body || {};
 
-
     const signal =
       payload.signal ||
       payload.action ||
       "";
-
 
     const result =
       evaluateSignal(
         signal
       );
 
+    lastWebhook = {
+      receivedAt:
+        new Date().toISOString(),
+
+      signal:
+        String(signal || "").toUpperCase(),
+
+      payload,
+
+      result,
+
+      assets:
+        evaluateAssets()
+    };
 
     res.json({
 
@@ -1419,12 +1432,39 @@ app.post(
         result,
 
       assets:
-        evaluateAssets()
+        lastWebhook.assets
 
     });
 
   }
 
+);
+
+
+// =====================================================
+// ULTIMA SENAL RECIBIDA DESDE TRADINGVIEW
+// =====================================================
+
+app.get(
+  "/webhook/last",
+  (_req, res) => {
+
+    if (!lastWebhook) {
+      return res.json({
+        ok: true,
+        indicator: "Luzifer 5.8",
+        message: "Todavia no se ha recibido ninguna senal por /webhook",
+        lastWebhook: null
+      });
+    }
+
+    res.json({
+      ok: true,
+      indicator: "Luzifer 5.8",
+      lastWebhook
+    });
+
+  }
 );
 
 
