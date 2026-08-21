@@ -27,6 +27,25 @@ let lastError = null;
 // =====================================================
 
 const USA_KEYWORDS = [
+  "consumer price index",
+  "core consumer price index",
+  "cpi",
+  "producer price index",
+  "core producer price index",
+  "ppi",
+  "nonfarm payrolls",
+  "non farm payrolls",
+  "nonfarm",
+  "unemployment rate",
+  "average hourly earnings",
+  "jolts job openings",
+  "retail sales",
+  "ism manufacturing pmi",
+  "ism services pmi",
+  "ism",
+  "federal funds rate",
+  "interest rate decision",
+  "fed interest rate decision",
   "s&p global composite pmi",
   "s&p global manufacturing pmi",
   "s&p global services pmi",
@@ -920,107 +939,74 @@ function direction(
       event || ""
     ).toLowerCase();
 
-
   const a =
     num(actual);
 
-
   const f =
     num(forecast);
-
 
   if (
     a === null ||
     f === null
   ) {
-
     return "UNKNOWN";
-
   }
 
-
-  // Datos normalmente USD positivos
+  // Datos donde un resultado MAYOR al forecast
+  // suele apoyar al USD/DXY.
   const usdPositive = [
-
     "non farm",
     "nonfarm",
     "payroll",
+    "average hourly earnings",
+    "jolts",
     "retail sales",
     "gdp",
     "ism",
+    "pmi",
     "adp",
     "consumer confidence",
-    "durable goods"
-
+    "durable goods",
+    "personal income",
+    "personal spending",
+    "cpi",
+    "consumer price index",
+    "ppi",
+    "producer price index",
+    "personal consumption expenditures",
+    "pce",
+    "interest rate",
+    "federal funds rate"
   ].some(
-
     keyword =>
       name.includes(keyword)
-
   );
 
-
-  // Datos donde un número menor
-  // normalmente significa USD más débil
-  const usdNegative = [
-
+  // Datos donde un resultado MENOR al forecast
+  // suele apoyar al USD/DXY.
+  const usdInverse = [
     "unemployment",
     "jobless claims",
     "initial jobless",
     "continuing jobless"
-
   ].some(
-
     keyword =>
       name.includes(keyword)
-
   );
 
-
   if (usdPositive) {
-
-    if (a > f) {
-
-      return "USD_BULLISH";
-
-    }
-
-
-    if (a < f) {
-
-      return "USD_BEARISH";
-
-    }
-
-
+    if (a > f) return "USD_BULLISH";
+    if (a < f) return "USD_BEARISH";
     return "NEUTRAL";
-
   }
 
-
-  if (usdNegative) {
-
-    if (a < f) {
-
-      return "USD_BULLISH";
-
-    }
-
-
-    if (a > f) {
-
-      return "USD_BEARISH";
-
-    }
-
-
+  if (usdInverse) {
+    if (a < f) return "USD_BULLISH";
+    if (a > f) return "USD_BEARISH";
     return "NEUTRAL";
-
   }
-
 
   return "UNKNOWN";
-
 }
 
 
@@ -1064,128 +1050,23 @@ function evaluateSignal(signal) {
     // ================================================
     // BUY DE LUZIFER
     // ================================================
-    if (s === "BUY") {
-
-      if (
-        dir ===
-        "USD_BEARISH"
-      ) {
-
-        score += 2;
-
-        reasons.push(
-          `${event.event}: USD debil / favorece BUY`
-        );
-
-      }
-
-      else if (
-        dir ===
-        "USD_BULLISH"
-      ) {
-
-        score -= 2;
-
-        reasons.push(
-          `${event.event}: USD fuerte / contrario a BUY`
-        );
-
-      }
-
-    }
-
-    // ================================================
-    // SELL DE LUZIFER
-    // ================================================
-    if (s === "SELL") {
-
-      if (
-        dir ===
-        "USD_BULLISH"
-      ) {
-
-        score += 2;
-
-        reasons.push(
-          `${event.event}: USD fuerte / favorece SELL`
-        );
-
-      }
-
-      else if (
-        dir ===
-        "USD_BEARISH"
-      ) {
-
-        score -= 2;
-
-        reasons.push(
-          `${event.event}: USD debil / contrario a SELL`
-        );
-
-      }
-
-    }
-
-  }
-
-  // =====================================================
-  // CONFIRMACION DXY
-  // DXY NO CREA LA SEÑAL; SOLO CONFIRMA O CONTRADICE
-  // =====================================================
-  const assetContext =
-    evaluateAssets();
-
-  const dxyState =
-    assetContext?.DXY?.state ||
-    "NEUTRAL";
-
+    // DXY aqui se deriva de las mismas noticias del USD.
+  // Por eso NO modifica el score todavía, para evitar contar
+  // dos veces la misma información.
   if (s === "BUY") {
-
     if (dxyState === "DESFAVORABLE") {
-
-      score += 1;
-
-      reasons.push(
-        "DXY debil / confirma BUY"
-      );
-
+      reasons.push("DXY por noticias: debil / contexto favorable a BUY");
+    } else if (dxyState === "FAVORABLE") {
+      reasons.push("DXY por noticias: fuerte / contexto contrario a BUY");
     }
-
-    else if (dxyState === "FAVORABLE") {
-
-      score -= 1;
-
-      reasons.push(
-        "DXY fuerte / contradice BUY"
-      );
-
-    }
-
   }
 
   if (s === "SELL") {
-
     if (dxyState === "FAVORABLE") {
-
-      score += 1;
-
-      reasons.push(
-        "DXY fuerte / confirma SELL"
-      );
-
+      reasons.push("DXY por noticias: fuerte / contexto favorable a SELL");
+    } else if (dxyState === "DESFAVORABLE") {
+      reasons.push("DXY por noticias: debil / contexto contrario a SELL");
     }
-
-    else if (dxyState === "DESFAVORABLE") {
-
-      score -= 1;
-
-      reasons.push(
-        "DXY debil / contradice SELL"
-      );
-
-    }
-
   }
 
   let confirmation =
@@ -1448,6 +1329,41 @@ app.get(
     });
   }
 );
+
+// =====================================================
+// PRUEBAS RAPIDAS BUY / SELL
+// =====================================================
+
+app.get(
+  "/test/buy",
+  (_req, res) => {
+    const result = evaluateSignal("BUY");
+
+    res.json({
+      ok: true,
+      indicator: "Luzifer 5.8",
+      test: "BUY",
+      result,
+      assets: evaluateAssets()
+    });
+  }
+);
+
+app.get(
+  "/test/sell",
+  (_req, res) => {
+    const result = evaluateSignal("SELL");
+
+    res.json({
+      ok: true,
+      indicator: "Luzifer 5.8",
+      test: "SELL",
+      result,
+      assets: evaluateAssets()
+    });
+  }
+);
+
 
 // =====================================================
 // WEBHOOK PARA LUZIFER
