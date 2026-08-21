@@ -56,7 +56,21 @@ const USA_KEYWORDS = [
   "existing home sales",
   "new home sales",
   "initial jobless claims",
-  "continuing jobless claims"
+  "continuing jobless claims",
+  "pmi",
+  "s&p global",
+  "baker hughes",
+  "cftc",
+  "auction",
+  "api weekly crude",
+  "eia",
+  "jackson hole",
+  "chicago fed",
+  "goods trade balance",
+  "wholesale inventories",
+  "natural gas",
+  "kansas fed"
+];
 
 
 // =====================================================
@@ -123,249 +137,131 @@ function assetState(score) {
   return "NEUTRAL";
 }
 
-function eventBias(event) {
-
-  const name =
-    String(event.event || "").toLowerCase();
-
-  const macro =
-    String(event.macroCategory || "").toLowerCase();
-
-  // Estos son BIASES PREVIOS, no resultados publicados.
-  // La API actual no entrega actual/forecast/previous.
-
-  if (
-    name.includes("unemployment") ||
-    name.includes("jobless claims") ||
-    name.includes("initial jobless") ||
-    name.includes("continuing jobless")
-  ) {
-    return {
-      usd: "FAVORABLE",
-      reason: "Mercado laboral: un dato mejor de lo esperado tendería a favorecer al USD; falta el resultado real."
-    };
-  }
-
-  if (
-    name.includes("non farm") ||
-    name.includes("nonfarm") ||
-    name.includes("payroll") ||
-    name.includes("adp")
-  ) {
-    return {
-      usd: "FAVORABLE",
-      reason: "Empleo de EE.UU.: un resultado fuerte tendería a favorecer al USD; falta el resultado real."
-    };
-  }
-
-  if (
-    name.includes("cpi") ||
-    name.includes("ppi") ||
-    name.includes("pce") ||
-    macro.includes("inflation")
-  ) {
-    return {
-      usd: "FAVORABLE",
-      reason: "Inflación: una lectura alta puede reforzar expectativas de tasas; falta el resultado real."
-    };
-  }
-
-  if (
-    name.includes("fomc") ||
-    name.includes("fed") ||
-    name.includes("interest rate") ||
-    macro.includes("monetary policy") ||
-    name.includes("powell")
-  ) {
-    return {
-      usd: "NEUTRAL",
-      reason: "Evento de política monetaria: el sesgo depende del tono y del resultado; falta información del comunicado."
-    };
-  }
-
-  if (
-    name.includes("gdp") ||
-    name.includes("pmi") ||
-    name.includes("retail sales") ||
-    name.includes("durable goods") ||
-    name.includes("consumer confidence") ||
-    macro.includes("growth") ||
-    macro.includes("confidence")
-  ) {
-    return {
-      usd: "FAVORABLE",
-      reason: "Crecimiento/confianza: un resultado fuerte tendería a favorecer al USD; falta el resultado real."
-    };
-  }
-
-  return {
-    usd: "NEUTRAL",
-    reason: "Evento USA sin resultado publicado suficiente para determinar dirección."
-  };
-}
-
-
-function biasStateForAsset(event, asset) {
-
-  const bias = eventBias(event);
-
-  if (asset === "USD") {
-    return {
-      state: bias.usd,
-      reason: bias.reason
-    };
-  }
-
-  if (asset === "ORO") {
-
-    if (bias.usd === "FAVORABLE") {
-      return {
-        state: "DESFAVORABLE",
-        reason: "Sesgo previo de USD favorable; normalmente representa presión para el oro, pero falta el resultado real."
-      };
-    }
-
-    if (bias.usd === "DESFAVORABLE") {
-      return {
-        state: "FAVORABLE",
-        reason: "Sesgo previo de USD débil; normalmente puede apoyar al oro, pero falta el resultado real."
-      };
-    }
-
-    return {
-      state: "NEUTRAL",
-      reason: bias.reason
-    };
-  }
-
-  if (asset === "WTI") {
-
-    const name =
-      String(event.event || "").toLowerCase();
-
-    if (
-      name.includes("crude oil") ||
-      name.includes("oil rig") ||
-      name.includes("oil stock") ||
-      name.includes("oil") ||
-      name.includes("opec")
-    ) {
-      return {
-        state: "NEUTRAL",
-        reason: "Evento directo de petróleo detectado; esta fuente no entrega el resultado para determinar dirección."
-      };
-    }
-
-    return {
-      state: bias.usd === "FAVORABLE"
-        ? "DESFAVORABLE"
-        : bias.usd === "DESFAVORABLE"
-          ? "FAVORABLE"
-          : "NEUTRAL",
-      reason: "Contexto USD para commodity; no sustituye datos directos de petróleo."
-    };
-  }
-
-  if (asset === "BTC") {
-
-    if (bias.usd === "FAVORABLE") {
-      return {
-        state: "DESFAVORABLE",
-        reason: "Sesgo previo de USD favorable puede ejercer presión sobre activos de riesgo; falta el resultado real."
-      };
-    }
-
-    if (bias.usd === "DESFAVORABLE") {
-      return {
-        state: "FAVORABLE",
-        reason: "Sesgo previo de USD débil puede favorecer activos de riesgo; falta el resultado real."
-      };
-    }
-
-    return {
-      state: "NEUTRAL",
-      reason: "Sin evento específico de BTC suficiente en este calendario."
-    };
-  }
-
-  return {
-    state: "NEUTRAL",
-    reason: "Sin información suficiente."
-  };
-}
-
-
 function evaluateAssets() {
+  const recent = recentNews().slice(0, 20);
 
-  const events =
-    [...upcomingNews(), ...recentNews()]
-      .sort(
-        (a, b) =>
-          eventTime(a.date) -
-          eventTime(b.date)
+  const scores = {
+    USD: 0,
+    ORO: 0,
+    WTI: 0,
+    BTC: 0
+  };
+
+  const reasons = {
+    USD: [],
+    ORO: [],
+    WTI: [],
+    BTC: []
+  };
+
+  for (const event of recent) {
+    const dir = direction(
+      event.event,
+      event.actual,
+      event.forecast
+    );
+
+    const assets = assetFromEvent(event);
+    const name =
+      String(
+        event.event || "Noticia"
+      ).trim();
+
+    const impact =
+      event.importance >= 3
+        ? "ALTO"
+        : event.importance === 2
+          ? "MEDIO"
+          : "BAJO";
+
+    if (dir === "USD_BULLISH") {
+      scores.USD += 1;
+      scores.ORO -= 1;
+      scores.WTI -= 1;
+      scores.BTC -= 1;
+
+      reasons.USD.push(
+        `${name}: USD fuerte`
+      );
+      reasons.ORO.push(
+        `${name}: presion por USD fuerte`
+      );
+      reasons.WTI.push(
+        `${name}: USD fuerte puede presionar commodities`
+      );
+      reasons.BTC.push(
+        `${name}: USD fuerte / presion sobre riesgo`
       );
 
-  const assets = [
-    "USD",
-    "ORO",
-    "WTI",
-    "BTC"
-  ];
+      continue;
+    }
 
-  const result = {};
+    if (dir === "USD_BEARISH") {
+      scores.USD -= 1;
+      scores.ORO += 1;
+      scores.WTI += 1;
+      scores.BTC += 1;
 
-  for (const asset of assets) {
+      reasons.USD.push(
+        `${name}: USD debil`
+      );
+      reasons.ORO.push(
+        `${name}: apoyo por USD debil`
+      );
+      reasons.WTI.push(
+        `${name}: USD debil puede apoyar commodities`
+      );
+      reasons.BTC.push(
+        `${name}: USD debil / contexto favorable a riesgo`
+      );
 
-    const candidates =
-      events
-        .map(event => ({
-          event,
-          bias:
-            biasStateForAsset(
-              event,
-              asset
-            )
-        }))
-        .filter(item =>
-          item.bias.state !== "NEUTRAL"
-        );
+      continue;
+    }
 
-    if (candidates.length > 0) {
+    if (assets.includes("USD")) {
+      reasons.USD.push(
+        `${name}: evento ${impact}, sin resultado numerico`
+      );
+    }
 
-      const item =
-        candidates[0];
+    if (assets.includes("ORO")) {
+      reasons.ORO.push(
+        `${name}: contexto relevante para oro, sin resultado numerico`
+      );
+    }
 
-      result[asset] = {
-        state:
-          item.bias.state,
-        reason:
-          item.bias.reason,
-        event:
-          item.event.event,
-        date:
-          item.event.date,
-        impact:
-          item.event.importance,
-        macroCategory:
-          item.event.macroCategory
-      };
+    if (assets.includes("WTI")) {
+      reasons.WTI.push(
+        `${name}: noticia WTI/energia ${impact}, sin resultado numerico`
+      );
+    }
 
-    } else {
-
-      result[asset] = {
-        state: "NEUTRAL",
-        reason:
-          asset === "BTC"
-            ? "Sin evento específico de BTC suficiente en este calendario."
-            : "Sin información direccional suficiente."
-      };
+    if (assets.includes("BTC")) {
+      reasons.BTC.push(
+        `${name}: contexto crypto ${impact}, sin resultado numerico`
+      );
     }
   }
 
-  return result;
-
+  return {
+    USD: {
+      state: assetState(scores.USD),
+      reason: reasons.USD[0] || "Sin dato economico reciente suficiente"
+    },
+    ORO: {
+      state: assetState(scores.ORO),
+      reason: reasons.ORO[0] || "Sin dato economico reciente suficiente"
+    },
+    WTI: {
+      state: assetState(scores.WTI),
+      reason: reasons.WTI[0] || "Sin noticia WTI directa suficiente"
+    },
+    BTC: {
+      state: assetState(scores.BTC),
+      reason: reasons.BTC[0] || "Sin dato economico reciente suficiente"
+    }
+  };
 }
-
 
 
 // =====================================================
@@ -469,119 +365,118 @@ function importance(value) {
 
 // =====================================================
 // NORMALIZAR NOTICIA
-// API REAL: Start / Name / Impact / Currency / MacroCateg
 // =====================================================
 
 function normalize(event) {
 
-  const start =
-    pick(event, [
-      "Start",
-      "start",
+  return {
+
+    date: pick(event, [
       "date",
       "Date",
       "datetime",
       "Datetime",
       "time",
-      "Time"
-    ]);
-
-  const name =
-    pick(event, [
-      "Name",
-      "name",
-      "event",
-      "Event",
-      "title",
-      "Title",
-      "category",
-      "Category"
-    ]) || "";
-
-  const impactValue =
-    pick(event, [
-      "Impact",
-      "impact",
-      "importance",
-      "Importance"
-    ]);
-
-  return {
-
-    id:
-      pick(event, ["Id", "id"]),
-
-    date: start,
+      "Time",
+      "Start",
+      "start",
+      "startDate",
+      "StartDate"
+    ]),
 
     country:
       pick(event, [
-        "Country",
         "country",
+        "Country",
         "country_code",
         "CountryCode"
-      ]) || "USA",
+      ]) ||
+      "United States",
 
     currency:
       pick(event, [
-        "Currency",
-        "currency"
-      ]) || "USD",
+        "currency",
+        "Currency"
+      ]) ||
+      "USD",
 
-    event: name,
+    event:
+      pick(event, [
+        "event",
+        "Event",
+        "title",
+        "Title",
+        "name",
+        "Name",
+        "category",
+        "Category"
+      ]) ||
+      "",
 
     actual:
       pick(event, [
-        "Actual",
-        "actual"
+        "actual",
+        "Actual"
       ]),
 
     forecast:
       pick(event, [
-        "Forecast",
         "forecast",
-        "Consensus",
-        "consensus"
+        "Forecast",
+        "consensus",
+        "Consensus"
       ]),
 
     previous:
       pick(event, [
-        "Previous",
-        "previous"
+        "previous",
+        "Previous"
       ]),
 
-    release:
-      pick(event, [
-        "Release",
-        "release"
-      ]),
-
-    eventType:
-      pick(event, [
-        "Event_Type",
-        "EventType",
-        "Type",
-        "type"
-      ]),
+    importance:
+      importance(
+        pick(event, [
+          "importance",
+          "Importance",
+          "impact",
+          "Impact"
+        ])
+      ),
 
     macroCategory:
       pick(event, [
-        "MacroCateg",
-        "macroCateg",
+        "macroCategory",
         "MacroCategory",
-        "category"
-      ]) || "",
+        "MacroCateg"
+      ]),
 
     impactScore:
       num(
         pick(event, [
-          "Impact_score",
-          "impact_score",
-          "ImpactScore"
+          "impactScore",
+          "ImpactScore",
+          "Impact_score"
         ])
       ),
 
-    importance:
-      importance(impactValue)
+    release:
+      pick(event, [
+        "release",
+        "Release"
+      ]),
+
+    id:
+      pick(event, [
+        "id",
+        "Id"
+      ]),
+
+    eventType:
+      pick(event, [
+        "eventType",
+        "EventType",
+        "Event_Type"
+      ])
 
   };
 
@@ -683,12 +578,10 @@ function isRelevant(event) {
 
 
 // =====================================================
-// FECHA ROBUSTA DE LA API
-// Formato real: MM/DD/YYYY HH:mm:ss
+// FECHA
 // =====================================================
 
 function eventTime(value) {
-
   if (
     value === null ||
     value === undefined ||
@@ -698,7 +591,6 @@ function eventTime(value) {
   }
 
   if (typeof value === "number") {
-
     const ms =
       value < 100000000000
         ? value * 1000
@@ -709,41 +601,56 @@ function eventTime(value) {
       : NaN;
   }
 
-  const s = String(value).trim();
+  const s =
+    String(value).trim();
 
-  // ISO / formatos reconocidos por Date.parse
-  const direct = Date.parse(s);
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
 
-  if (Number.isFinite(direct)) {
-    return direct;
+    const ms =
+      n < 100000000000
+        ? n * 1000
+        : n;
+
+    return Number.isFinite(ms)
+      ? ms
+      : NaN;
   }
 
-  // API real: MM/DD/YYYY HH:mm:ss
   const m =
     s.match(
-      /^(\\d{2})\\/(\\d{2})\\/(\\d{4})\\s+(\\d{2}):(\\d{2})(?::(\\d{2}))?$/
+      /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/
     );
 
   if (m) {
-
     const month = Number(m[1]);
     const day = Number(m[2]);
     const year = Number(m[3]);
     const hour = Number(m[4]);
     const minute = Number(m[5]);
-    const second = Number(m[6] || 0);
+    const second = Number(m[6]);
 
-    return new Date(
-      year,
-      month - 1,
-      day,
-      hour,
-      minute,
-      second
-    ).getTime();
+    const t =
+      Date.UTC(
+        year,
+        month - 1,
+        day,
+        hour,
+        minute,
+        second
+      );
+
+    return Number.isFinite(t)
+      ? t
+      : NaN;
   }
 
-  return NaN;
+  const t =
+    Date.parse(s);
+
+  return Number.isFinite(t)
+    ? t
+    : NaN;
 
 }
 
@@ -759,84 +666,106 @@ async function fetchCalendar() {
     const url =
       `${CALENDAR_BASE_URL}/events?country=USA`;
 
+
     console.log(
       "Consultando calendario USA..."
     );
 
+
     const response =
       await fetch(
+
         url,
+
         {
           headers: {
             Accept:
               "application/json"
           }
         }
+
       );
+
 
     if (!response.ok) {
 
       throw new Error(
         `Calendar HTTP ${response.status}`
       );
+
     }
+
 
     const data =
       await response.json();
 
-    // Guardamos la respuesta original para diagnóstico.
-    rawCalendar = unwrap(data);
 
     const merged =
-      rawCalendar
+      unwrap(data)
+
         .map(normalize)
+
         .filter(isUSA)
+
         .filter(isRelevant);
 
-    const seen = new Set();
+
+    const seen =
+      new Set();
+
 
     calendar =
       merged.filter(event => {
 
         const key = [
+
           event.date,
           event.event,
           event.currency,
           event.actual,
           event.forecast,
           event.previous
+
         ].join("|");
 
+
         if (seen.has(key)) {
+
           return false;
+
         }
 
+
         seen.add(key);
+
         return true;
+
       });
+
 
     lastUpdate =
       new Date().toISOString();
 
+
     lastError = null;
 
-    console.log(
-      `Eventos crudos: ${rawCalendar.length}`
-    );
 
     console.log(
       `Noticias USA cargadas: ${calendar.length}`
     );
+
 
   } catch (error) {
 
     lastError =
       error.message;
 
+
     console.error(
       "Calendar update error:",
       error.message
     );
+
   }
 
 }
@@ -1327,6 +1256,12 @@ app.get(
       assets:
         evaluateAssets(),
 
+      rawEventCount:
+        rawCalendar.length,
+
+      filteredEventCount:
+        calendar.length,
+
       error:
         lastError
 
@@ -1338,36 +1273,32 @@ app.get(
 
 
 // =====================================================
-// NEWS DE 4 ACTIVOS + MOTIVO
+// RAW NEWS
 // =====================================================
 
 app.get(
-  "/news/assets",
+  "/news/raw",
   (_req, res) => {
     res.json({
       ok: true,
-      indicator: "Luzifer 5.8",
       updatedAt: lastUpdate,
-      assets: evaluateAssets(),
-      recent: recentNews().slice(0, 20),
-      upcoming: upcomingNews().slice(0, 20),
-      rawEventCount: rawCalendar.length,
-      filteredEventCount: calendar.length,
+      totalRawEvents: rawCalendar.length,
+      totalFilteredEvents: calendar.length,
+      events: calendar.slice(0, 50),
       error: lastError
     });
   }
 );
 
+
 // =====================================================
-// DIAGNOSTICO DE API ORIGINAL
+// DIAGNOSTICO DE LA API ORIGINAL
 // =====================================================
 
 app.get(
   "/news/api-raw",
   async (_req, res) => {
-
     try {
-
       const url =
         `${CALENDAR_BASE_URL}/events?country=USA`;
 
@@ -1376,14 +1307,12 @@ app.get(
           url,
           {
             headers: {
-              Accept:
-                "application/json"
+              Accept: "application/json"
             }
           }
         );
 
       if (!response.ok) {
-
         return res.status(
           response.status
         ).json({
@@ -1412,9 +1341,7 @@ app.get(
         firstEvents:
           events.slice(0, 10)
       });
-
     } catch (error) {
-
       res.status(500).json({
         ok: false,
         error: error.message
@@ -1425,28 +1352,25 @@ app.get(
 
 
 // =====================================================
-// NEWS RAW NORMALIZADA
+// NEWS DE 4 ACTIVOS + MOTIVO
 // =====================================================
 
 app.get(
-  "/news/raw",
+  "/news/assets",
   (_req, res) => {
-
     res.json({
       ok: true,
+      indicator: "Luzifer 5.8",
       updatedAt: lastUpdate,
-      totalRawEvents:
-        rawCalendar.length,
-      totalFilteredEvents:
-        calendar.length,
-      events:
-        calendar.slice(0, 50),
-      error:
-        lastError
+      assets: evaluateAssets(),
+      recent: recentNews().slice(0, 20),
+      upcoming: upcomingNews().slice(0, 20),
+      rawEventCount: rawCalendar.length,
+      filteredEventCount: calendar.length,
+      error: lastError
     });
   }
 );
-
 
 // =====================================================
 // WEBHOOK PARA LUZIFER
