@@ -1078,23 +1078,7 @@ app.get(
 app.get(
   "/news/assets",
   (_req, res) => {
-// =====================================================
-// DIAGNOSTICO TEMPORAL DEL CALENDARIO
-// =====================================================
 
-app.get(
-  "/news/raw",
-  (_req, res) => {
-
-    res.json({
-      ok: true,
-      updatedAt: lastUpdate,
-      totalEvents: calendar.length,
-      events: calendar.slice(0, 30),
-      error: lastError
-    });
-
-  }
 );
     res.json({
 
