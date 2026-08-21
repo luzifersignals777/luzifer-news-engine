@@ -1030,15 +1030,12 @@ function evaluateSignal(signal) {
       .slice(0, 10);
 
   let score = 0;
-
   const reasons = [];
 
   // =====================================================
   // CONFIRMACION POR NOTICIAS RECIENTES
   // =====================================================
-  for (
-    const event of recent
-  ) {
+  for (const event of recent) {
 
     const dir =
       direction(
@@ -1047,91 +1044,111 @@ function evaluateSignal(signal) {
         event.forecast
       );
 
-    // ================================================
-    // BUY DE LUZIFER
-    // ================================================
-    // DXY aqui se deriva de las mismas noticias del USD.
-  // Por eso NO modifica el score todavía, para evitar contar
-  // dos veces la misma información.
+    if (s === "BUY") {
+      if (dir === "USD_BEARISH") {
+        score += 2;
+        reasons.push(
+          `${event.event}: USD debil / favorece BUY`
+        );
+      } else if (dir === "USD_BULLISH") {
+        score -= 2;
+        reasons.push(
+          `${event.event}: USD fuerte / contrario a BUY`
+        );
+      }
+    }
+
+    if (s === "SELL") {
+      if (dir === "USD_BULLISH") {
+        score += 2;
+        reasons.push(
+          `${event.event}: USD fuerte / favorece SELL`
+        );
+      } else if (dir === "USD_BEARISH") {
+        score -= 2;
+        reasons.push(
+          `${event.event}: USD debil / contrario a SELL`
+        );
+      }
+    }
+  }
+
+  // =====================================================
+  // CONTEXTO DXY
+  // Se deriva de las mismas noticias USD y por eso NO
+  // vuelve a sumar/restar al score para evitar doble conteo.
+  // =====================================================
+  const assetContext = evaluateAssets();
+  const dxyState =
+    assetContext?.DXY?.state || "NEUTRAL";
+
   if (s === "BUY") {
     if (dxyState === "DESFAVORABLE") {
-      reasons.push("DXY por noticias: debil / contexto favorable a BUY");
+      reasons.push(
+        "DXY por noticias: debil / contexto favorable a BUY"
+      );
     } else if (dxyState === "FAVORABLE") {
-      reasons.push("DXY por noticias: fuerte / contexto contrario a BUY");
+      reasons.push(
+        "DXY por noticias: fuerte / contexto contrario a BUY"
+      );
     }
   }
 
   if (s === "SELL") {
     if (dxyState === "FAVORABLE") {
-      reasons.push("DXY por noticias: fuerte / contexto favorable a SELL");
+      reasons.push(
+        "DXY por noticias: fuerte / contexto favorable a SELL"
+      );
     } else if (dxyState === "DESFAVORABLE") {
-      reasons.push("DXY por noticias: debil / contexto contrario a SELL");
+      reasons.push(
+        "DXY por noticias: debil / contexto contrario a SELL"
+      );
     }
   }
 
-  let confirmation =
-    "NEUTRAL";
+  let confirmation = "NEUTRAL";
 
   if (score >= 2) {
-
-    confirmation =
-      "CONFIRMA";
-
+    confirmation = "CONFIRMA";
   }
 
   if (score <= -2) {
+    confirmation = "CONTRARIA";
+  }
 
-    confirmation =
-      "CONTRARIA";
+  let dxyEffect = "NEUTRAL";
 
+  if (s === "BUY") {
+    if (dxyState === "DESFAVORABLE") {
+      dxyEffect = "CONFIRMA_BUY";
+    } else if (dxyState === "FAVORABLE") {
+      dxyEffect = "CONTRADICE_BUY";
+    }
+  }
+
+  if (s === "SELL") {
+    if (dxyState === "FAVORABLE") {
+      dxyEffect = "CONFIRMA_SELL";
+    } else if (dxyState === "DESFAVORABLE") {
+      dxyEffect = "CONTRADICE_SELL";
+    }
   }
 
   return {
-
     signal: s,
-
     confirmation,
-
     score,
-
     dxy: {
       state: dxyState,
-      effect:
-        s === "BUY"
-          ? (
-              dxyState === "DESFAVORABLE"
-                ? "CONFIRMA_BUY"
-                : dxyState === "FAVORABLE"
-                  ? "CONTRADICE_BUY"
-                  : "NEUTRAL"
-            )
-          : s === "SELL"
-            ? (
-                dxyState === "FAVORABLE"
-                  ? "CONFIRMA_SELL"
-                  : dxyState === "DESFAVORABLE"
-                    ? "CONTRADICE_SELL"
-                    : "NEUTRAL"
-              )
-            : "NEUTRAL"
+      effect: dxyEffect
     },
-
     reasons,
-
     upcomingHighImpact:
-
       upcoming.filter(
-
-        event =>
-          event.importance >= 3
-
+        event => event.importance >= 3
       ),
-
-    recentNews:
-      recent
-
+    recentNews: recent
   };
-
 }
 
 
