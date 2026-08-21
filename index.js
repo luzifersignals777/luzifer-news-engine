@@ -142,6 +142,7 @@ function evaluateAssets() {
 
   const scores = {
     USD: 0,
+    DXY: 0,
     ORO: 0,
     WTI: 0,
     BTC: 0
@@ -149,6 +150,7 @@ function evaluateAssets() {
 
   const reasons = {
     USD: [],
+    DXY: [],
     ORO: [],
     WTI: [],
     BTC: []
@@ -162,6 +164,7 @@ function evaluateAssets() {
     );
 
     const assets = assetFromEvent(event);
+
     const name =
       String(
         event.event || "Noticia"
@@ -176,6 +179,7 @@ function evaluateAssets() {
 
     if (dir === "USD_BULLISH") {
       scores.USD += 1;
+      scores.DXY += 1;
       scores.ORO -= 1;
       scores.WTI -= 1;
       scores.BTC -= 1;
@@ -183,12 +187,19 @@ function evaluateAssets() {
       reasons.USD.push(
         `${name}: USD fuerte`
       );
+
+      reasons.DXY.push(
+        `${name}: USD fuerte / favorece DXY`
+      );
+
       reasons.ORO.push(
         `${name}: presion por USD fuerte`
       );
+
       reasons.WTI.push(
         `${name}: USD fuerte puede presionar commodities`
       );
+
       reasons.BTC.push(
         `${name}: USD fuerte / presion sobre riesgo`
       );
@@ -198,6 +209,7 @@ function evaluateAssets() {
 
     if (dir === "USD_BEARISH") {
       scores.USD -= 1;
+      scores.DXY -= 1;
       scores.ORO += 1;
       scores.WTI += 1;
       scores.BTC += 1;
@@ -205,12 +217,19 @@ function evaluateAssets() {
       reasons.USD.push(
         `${name}: USD debil`
       );
+
+      reasons.DXY.push(
+        `${name}: USD debil / presiona DXY`
+      );
+
       reasons.ORO.push(
         `${name}: apoyo por USD debil`
       );
+
       reasons.WTI.push(
         `${name}: USD debil puede apoyar commodities`
       );
+
       reasons.BTC.push(
         `${name}: USD debil / contexto favorable a riesgo`
       );
@@ -221,6 +240,10 @@ function evaluateAssets() {
     if (assets.includes("USD")) {
       reasons.USD.push(
         `${name}: evento ${impact}, sin resultado numerico`
+      );
+
+      reasons.DXY.push(
+        `${name}: evento USD ${impact}, sin resultado numerico`
       );
     }
 
@@ -248,14 +271,22 @@ function evaluateAssets() {
       state: assetState(scores.USD),
       reason: reasons.USD[0] || "Sin dato economico reciente suficiente"
     },
+
+    DXY: {
+      state: assetState(scores.DXY),
+      reason: reasons.DXY[0] || "Sin dato economico reciente suficiente para DXY"
+    },
+
     ORO: {
       state: assetState(scores.ORO),
       reason: reasons.ORO[0] || "Sin dato economico reciente suficiente"
     },
+
     WTI: {
       state: assetState(scores.WTI),
       reason: reasons.WTI[0] || "Sin noticia WTI directa suficiente"
     },
+
     BTC: {
       state: assetState(scores.BTC),
       reason: reasons.BTC[0] || "Sin dato economico reciente suficiente"
