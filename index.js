@@ -61,335 +61,12 @@ const USA_KEYWORDS = [
 
 
 // =====================================================
-// ACTIVOS: USD / ORO / WTI / BTC
-// =====================================================
-
-const GOLD_KEYWORDS = [
-  "gold",
-  "bullion",
-  "precious metal",
-  "safe haven",
-  "real yields"
-];
-
-const WTI_KEYWORDS = [
-  "oil",
-  "crude",
-  "wti",
-  "brent",
-  "opec",
-  "supply",
-  "inventory",
-  "production",
-  "energy"
-];
-
-const BTC_KEYWORDS = [
-  "bitcoin",
-  "btc",
-  "crypto",
-  "cryptocurrency",
-  "digital asset",
-  "digital assets",
-  "crypto market"
-];
-
-function containsAny(name, keywords) {
-  return keywords.some(
-    keyword => name.includes(keyword)
-  );
-}
-
-function assetFromEvent(event) {
-
-  const name =
-    String(
-      event.event || ""
-    ).toLowerCase();
-
-  const assets = ["USD"];
-
-  if (
-    containsAny(
-      name,
-      GOLD_KEYWORDS
-    )
-  ) {
-    assets.push("ORO");
-  }
-
-  if (
-    containsAny(
-      name,
-      WTI_KEYWORDS
-    )
-  ) {
-    assets.push("WTI");
-  }
-
-  if (
-    containsAny(
-      name,
-      BTC_KEYWORDS
-    )
-  ) {
-    assets.push("BTC");
-  }
-
-  return assets;
-}
-
-function assetState(score) {
-
-  if (score > 0) {
-    return "FAVORABLE";
-  }
-
-  if (score < 0) {
-    return "DESFAVORABLE";
-  }
-
-  return "NEUTRAL";
-}
-
-
-// =====================================================
-// EVALUAR LOS 4 ACTIVOS
-// =====================================================
-
-function evaluateAssets() {
-
-  const recent =
-    recentNews().slice(0, 20);
-
-  const scores = {
-    USD: 0,
-    ORO: 0,
-    WTI: 0,
-    BTC: 0
-  };
-
-  const reasons = {
-    USD: [],
-    ORO: [],
-    WTI: [],
-    BTC: []
-  };
-
-  for (
-    const event of recent
-  ) {
-
-    const dir =
-      direction(
-        event.event,
-        event.actual,
-        event.forecast
-      );
-
-    if (
-      dir === "UNKNOWN"
-    ) {
-      continue;
-    }
-
-    const assets =
-      assetFromEvent(event);
-
-    const name =
-      String(
-        event.event ||
-        "Noticia"
-      ).trim();
-
-
-    // =================================================
-    // USD
-    // =================================================
-
-    if (
-      dir === "USD_BULLISH"
-    ) {
-
-      scores.USD += 1;
-
-      reasons.USD.push(
-        `${name}: USD fuerte`
-      );
-
-    }
-
-    if (
-      dir === "USD_BEARISH"
-    ) {
-
-      scores.USD -= 1;
-
-      reasons.USD.push(
-        `${name}: USD debil`
-      );
-
-    }
-
-
-    // =================================================
-    // ORO
-    // =================================================
-
-    if (
-      dir === "USD_BULLISH"
-    ) {
-
-      scores.ORO -= 1;
-
-      reasons.ORO.push(
-        `${name}: presion por USD fuerte`
-      );
-
-    }
-
-    if (
-      dir === "USD_BEARISH"
-    ) {
-
-      scores.ORO += 1;
-
-      reasons.ORO.push(
-        `${name}: apoyo por USD debil`
-      );
-
-    }
-
-
-    // =================================================
-    // WTI
-    // =================================================
-
-    if (
-      assets.includes("WTI")
-    ) {
-
-      if (
-        dir === "USD_BULLISH"
-      ) {
-
-        scores.WTI -= 1;
-
-        reasons.WTI.push(
-          `${name}: USD fuerte puede presionar commodities`
-        );
-
-      }
-
-      else if (
-        dir === "USD_BEARISH"
-      ) {
-
-        scores.WTI += 1;
-
-        reasons.WTI.push(
-          `${name}: USD debil puede apoyar commodities`
-        );
-
-      }
-
-    }
-
-
-    // =================================================
-    // BTC
-    // =================================================
-
-    if (
-      dir === "USD_BEARISH"
-    ) {
-
-      scores.BTC += 1;
-
-      reasons.BTC.push(
-        `${name}: USD debil / contexto favorable a riesgo`
-      );
-
-    }
-
-    else if (
-      dir === "USD_BULLISH"
-    ) {
-
-      scores.BTC -= 1;
-
-      reasons.BTC.push(
-        `${name}: USD fuerte / presion sobre riesgo`
-      );
-
-    }
-
-  }
-
-
-  return {
-
-    USD: {
-      state:
-        assetState(
-          scores.USD
-        ),
-
-      reason:
-        reasons.USD[0] ||
-        "Sin dato economico reciente suficiente"
-    },
-
-    ORO: {
-      state:
-        assetState(
-          scores.ORO
-        ),
-
-      reason:
-        reasons.ORO[0] ||
-        "Sin dato economico reciente suficiente"
-    },
-
-    WTI: {
-      state:
-        assetState(
-          scores.WTI
-        ),
-
-      reason:
-        reasons.WTI[0] ||
-        "Sin noticia WTI directa suficiente"
-    },
-
-    BTC: {
-      state:
-        assetState(
-          scores.BTC
-        ),
-
-      reason:
-        reasons.BTC[0] ||
-        "Sin dato economico reciente suficiente"
-    }
-
-  };
-
-}
-
-
-// =====================================================
 // FUNCIONES AUXILIARES
 // =====================================================
 
-function pick(
-  obj,
-  names
-) {
+function pick(obj, names) {
 
-  for (
-    const name of names
-  ) {
+  for (const name of names) {
 
     if (
       obj &&
@@ -408,10 +85,6 @@ function pick(
 }
 
 
-// =====================================================
-// NUMERO
-// =====================================================
-
 function num(value) {
 
   if (
@@ -424,38 +97,27 @@ function num(value) {
 
   }
 
-  const n =
-    Number(
-      String(value)
-        .replace(/,/g, "")
-        .replace("%", "")
-    );
+  const n = Number(
+    String(value)
+      .replace(/,/g, "")
+      .replace("%", "")
+  );
 
-  return Number.isFinite(n)
-    ? n
-    : null;
+  return Number.isFinite(n) ? n : null;
 
 }
 
 
-// =====================================================
-// IMPORTANCIA
-// =====================================================
-
 function importance(value) {
 
-  if (
-    typeof value === "number"
-  ) {
+  if (typeof value === "number") {
 
     return value;
 
   }
 
   const s =
-    String(
-      value ?? ""
-    ).toLowerCase();
+    String(value ?? "").toLowerCase();
 
 
   if (
@@ -488,8 +150,7 @@ function importance(value) {
   }
 
 
-  const n =
-    Number(value);
+  const n = Number(value);
 
   return Number.isFinite(n)
     ? n
@@ -506,99 +167,86 @@ function normalize(event) {
 
   return {
 
-    date:
-      pick(
-        event,
-        [
-          "date",
-          "Date",
-          "datetime",
-          "Datetime",
-          "time",
-          "Time",
-          "timestamp",
-          "Timestamp"
-        ]
-      ),
+    date: pick(event, [
+      "date",
+      "Date",
+      "datetime",
+      "Datetime",
+      "time",
+      "Time",
+      "timestamp",
+      "Timestamp",
+      "releaseDate",
+      "ReleaseDate",
+      "released_at",
+      "releasedAt"
+    ]),
 
     country:
-      pick(
-        event,
-        [
-          "country",
-          "Country",
-          "country_code",
-          "CountryCode"
-        ]
-      ) ||
+      pick(event, [
+        "country",
+        "Country",
+        "country_code",
+        "CountryCode"
+      ]) ||
       "United States",
 
     currency:
-      pick(
-        event,
-        [
-          "currency",
-          "Currency"
-        ]
-      ) ||
+      pick(event, [
+        "currency",
+        "Currency"
+      ]) ||
       "USD",
 
     event:
-      pick(
-        event,
-        [
-          "event",
-          "Event",
-          "title",
-          "Title",
-          "name",
-          "Name",
-          "category",
-          "Category"
-        ]
-      ) ||
+      pick(event, [
+        "event",
+        "Event",
+        "title",
+        "Title",
+        "name",
+        "Name",
+        "category",
+        "Category"
+      ]) ||
       "",
 
     actual:
-      pick(
-        event,
-        [
-          "actual",
-          "Actual"
-        ]
-      ),
+      pick(event, [
+        "actual",
+        "Actual",
+        "value",
+        "Value"
+      ]),
 
     forecast:
-      pick(
-        event,
-        [
-          "forecast",
-          "Forecast",
-          "consensus",
-          "Consensus"
-        ]
-      ),
+      pick(event, [
+        "forecast",
+        "Forecast",
+        "consensus",
+        "Consensus",
+        "estimate",
+        "Estimate"
+      ]),
 
     previous:
-      pick(
-        event,
-        [
-          "previous",
-          "Previous"
-        ]
-      ),
+      pick(event, [
+        "previous",
+        "Previous",
+        "prior",
+        "Prior"
+      ]),
 
     importance:
       importance(
-        pick(
-          event,
-          [
-            "importance",
-            "Importance",
-            "impact",
-            "Impact"
-          ]
-        )
+        pick(event, [
+          "importance",
+          "Importance",
+          "impact",
+          "Impact",
+          "priority",
+          "Priority"
+        ])
       )
 
   };
@@ -607,47 +255,33 @@ function normalize(event) {
 
 
 // =====================================================
-// EXTRAER EVENTOS
+// EXTRAER EVENTOS DE LA RESPUESTA
 // =====================================================
 
 function unwrap(data) {
 
-  if (
-    Array.isArray(data)
-  ) {
+  if (Array.isArray(data)) {
 
     return data;
 
   }
 
 
-  if (
-    Array.isArray(
-      data?.events
-    )
-  ) {
+  if (Array.isArray(data?.events)) {
 
     return data.events;
 
   }
 
 
-  if (
-    Array.isArray(
-      data?.data
-    )
-  ) {
+  if (Array.isArray(data?.data)) {
 
     return data.data;
 
   }
 
 
-  if (
-    Array.isArray(
-      data?.results
-    )
-  ) {
+  if (Array.isArray(data?.results)) {
 
     return data.results;
 
@@ -670,10 +304,12 @@ function isUSA(event) {
       event.country || ""
     ).toLowerCase();
 
+
   const currency =
     String(
       event.currency || ""
     ).toUpperCase();
+
 
   return (
 
@@ -693,7 +329,7 @@ function isUSA(event) {
 
 
 // =====================================================
-// FILTRO RELEVANTE
+// FILTRO NOTICIAS IMPORTANTES PARA USD / ORO
 // =====================================================
 
 function isRelevant(event) {
@@ -702,6 +338,7 @@ function isRelevant(event) {
     String(
       event.event || ""
     ).toLowerCase();
+
 
   return USA_KEYWORDS.some(
     keyword =>
@@ -712,87 +349,33 @@ function isRelevant(event) {
 
 
 // =====================================================
-// FECHA ROBUSTA
+// FECHA
 // =====================================================
 
 function eventTime(value) {
 
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-
+  if (value === null || value === undefined || value === "") {
     return NaN;
-
   }
 
-
-  if (
-    typeof value === "number"
-  ) {
-
-    const ms =
-      value < 100000000000
-        ? value * 1000
-        : value;
-
-    return Number.isFinite(ms)
-      ? ms
-      : NaN;
-
+  if (typeof value === "number") {
+    const ms = value < 100000000000 ? value * 1000 : value;
+    return Number.isFinite(ms) ? ms : NaN;
   }
 
+  const s = String(value).trim();
 
-  const s =
-    String(value).trim();
-
-
-  // Timestamp numerico
-  if (
-    /^\d+$/.test(s)
-  ) {
-
-    const n =
-      Number(s);
-
-    const ms =
-      n < 100000000000
-        ? n * 1000
-        : n;
-
-    return Number.isFinite(ms)
-      ? ms
-      : NaN;
-
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    const ms = n < 100000000000 ? n * 1000 : n;
+    return Number.isFinite(ms) ? ms : NaN;
   }
 
+  let t = Date.parse(s);
+  if (Number.isFinite(t)) return t;
 
-  // ISO normal
-  let t =
-    Date.parse(s);
-
-  if (
-    Number.isFinite(t)
-  ) {
-
-    return t;
-
-  }
-
-
-  // YYYY-MM-DD HH:mm:ss
-  t =
-    Date.parse(
-      s.replace(
-        " ",
-        "T"
-      )
-    );
-
-  return Number.isFinite(t)
-    ? t
-    : NaN;
+  t = Date.parse(s.replace(" ", "T"));
+  return Number.isFinite(t) ? t : NaN;
 
 }
 
@@ -808,6 +391,7 @@ async function fetchCalendar() {
     const url =
       `${CALENDAR_BASE_URL}/events?country=USA`;
 
+
     console.log(
       "Consultando calendario USA..."
     );
@@ -815,19 +399,20 @@ async function fetchCalendar() {
 
     const response =
       await fetch(
+
         url,
+
         {
           headers: {
             Accept:
               "application/json"
           }
         }
+
       );
 
 
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
 
       throw new Error(
         `Calendar HTTP ${response.status}`
@@ -839,69 +424,55 @@ async function fetchCalendar() {
     const data =
       await response.json();
 
+    rawCalendar = unwrap(data);
 
-    // ===============================================
-    // GUARDAMOS LOS DATOS CRUDOS NORMALIZADOS
-    // ===============================================
-
-    rawCalendar =
-      unwrap(data)
-        .map(normalize);
-
-
-    // ===============================================
-    // FILTRO USA + RELEVANTE
-    // ===============================================
 
     const merged =
       rawCalendar
+
+        .map(normalize)
+
         .filter(isUSA)
+
         .filter(isRelevant);
 
-
-    // ===============================================
-    // ELIMINAR DUPLICADOS
-    // ===============================================
 
     const seen =
       new Set();
 
 
     calendar =
-      merged.filter(
-        event => {
+      merged.filter(event => {
 
-          const key =
-            [
-              event.date,
-              event.event,
-              event.currency,
-              event.actual,
-              event.forecast,
-              event.previous
-            ].join("|");
+        const key = [
 
+          event.date,
+          event.event,
+          event.currency,
+          event.actual,
+          event.forecast,
+          event.previous
 
-          if (
-            seen.has(key)
-          ) {
-
-            return false;
-
-          }
+        ].join("|");
 
 
-          seen.add(key);
+        if (seen.has(key)) {
 
-          return true;
+          return false;
 
         }
-      );
+
+
+        seen.add(key);
+
+        return true;
+
+      });
 
 
     lastUpdate =
-      new Date()
-        .toISOString();
+      new Date().toISOString();
+
 
     lastError = null;
 
@@ -911,14 +482,7 @@ async function fetchCalendar() {
     );
 
 
-    console.log(
-      `Eventos crudos recibidos: ${rawCalendar.length}`
-    );
-
-
-  }
-
-  catch (error) {
+  } catch (error) {
 
     lastError =
       error.message;
@@ -953,32 +517,33 @@ function upcomingNews() {
 
   return calendar
 
-    .filter(
-      event => {
+    .filter(event => {
 
-        const t =
-          eventTime(
-            event.date
-          );
-
-
-        return (
-
-          Number.isFinite(t) &&
-
-          t >= now &&
-
-          t <= end
-
+      const t =
+        eventTime(
+          event.date
         );
 
-      }
-    )
+
+      return (
+
+        Number.isFinite(t) &&
+
+        t >= now &&
+
+        t <= end
+
+      );
+
+    })
 
     .sort(
+
       (a, b) =>
+
         eventTime(a.date) -
         eventTime(b.date)
+
     );
 
 }
@@ -1003,32 +568,33 @@ function recentNews() {
 
   return calendar
 
-    .filter(
-      event => {
+    .filter(event => {
 
-        const t =
-          eventTime(
-            event.date
-          );
-
-
-        return (
-
-          Number.isFinite(t) &&
-
-          t >= start &&
-
-          t <= now
-
+      const t =
+        eventTime(
+          event.date
         );
 
-      }
-    )
+
+      return (
+
+        Number.isFinite(t) &&
+
+        t >= start &&
+
+        t <= now
+
+      );
+
+    })
 
     .sort(
+
       (a, b) =>
+
         eventTime(b.date) -
         eventTime(a.date)
+
     );
 
 }
@@ -1053,6 +619,7 @@ function direction(
   const a =
     num(actual);
 
+
   const f =
     num(forecast);
 
@@ -1067,6 +634,7 @@ function direction(
   }
 
 
+  // Datos normalmente USD positivos
   const usdPositive = [
 
     "non farm",
@@ -1080,11 +648,15 @@ function direction(
     "durable goods"
 
   ].some(
+
     keyword =>
       name.includes(keyword)
+
   );
 
 
+  // Datos donde un número menor
+  // normalmente significa USD más débil
   const usdNegative = [
 
     "unemployment",
@@ -1093,27 +665,23 @@ function direction(
     "continuing jobless"
 
   ].some(
+
     keyword =>
       name.includes(keyword)
+
   );
 
 
-  if (
-    usdPositive
-  ) {
+  if (usdPositive) {
 
-    if (
-      a > f
-    ) {
+    if (a > f) {
 
       return "USD_BULLISH";
 
     }
 
 
-    if (
-      a < f
-    ) {
+    if (a < f) {
 
       return "USD_BEARISH";
 
@@ -1125,22 +693,16 @@ function direction(
   }
 
 
-  if (
-    usdNegative
-  ) {
+  if (usdNegative) {
 
-    if (
-      a < f
-    ) {
+    if (a < f) {
 
       return "USD_BULLISH";
 
     }
 
 
-    if (
-      a > f
-    ) {
+    if (a > f) {
 
       return "USD_BEARISH";
 
@@ -1161,9 +723,7 @@ function direction(
 // EVALUAR SEÑAL EXISTENTE
 // =====================================================
 
-function evaluateSignal(
-  signal
-) {
+function evaluateSignal(signal) {
 
   const s =
     String(
@@ -1183,6 +743,7 @@ function evaluateSignal(
 
   let score = 0;
 
+
   const reasons = [];
 
 
@@ -1192,19 +753,21 @@ function evaluateSignal(
 
     const dir =
       direction(
+
         event.event,
+
         event.actual,
+
         event.forecast
+
       );
 
 
-    // ===============================================
-    // BUY
-    // ===============================================
+    // ================================================
+    // BUY DE LUZIFER
+    // ================================================
 
-    if (
-      s === "BUY"
-    ) {
+    if (s === "BUY") {
 
       if (
         dir ===
@@ -1213,11 +776,15 @@ function evaluateSignal(
 
         score += 2;
 
+
         reasons.push(
-          `${event.event}: USD debil / favorece BUY`
+
+          `${event.event}: USD débil / favorece BUY`
+
         );
 
       }
+
 
       else if (
         dir ===
@@ -1226,8 +793,11 @@ function evaluateSignal(
 
         score -= 2;
 
+
         reasons.push(
+
           `${event.event}: USD fuerte / contrario a BUY`
+
         );
 
       }
@@ -1235,13 +805,11 @@ function evaluateSignal(
     }
 
 
-    // ===============================================
-    // SELL
-    // ===============================================
+    // ================================================
+    // SELL DE LUZIFER
+    // ================================================
 
-    if (
-      s === "SELL"
-    ) {
+    if (s === "SELL") {
 
       if (
         dir ===
@@ -1250,11 +818,15 @@ function evaluateSignal(
 
         score += 2;
 
+
         reasons.push(
+
           `${event.event}: USD fuerte / favorece SELL`
+
         );
 
       }
+
 
       else if (
         dir ===
@@ -1263,8 +835,11 @@ function evaluateSignal(
 
         score -= 2;
 
+
         reasons.push(
-          `${event.event}: USD debil / contrario a SELL`
+
+          `${event.event}: USD débil / contrario a SELL`
+
         );
 
       }
@@ -1278,9 +853,7 @@ function evaluateSignal(
     "NEUTRAL";
 
 
-  if (
-    score >= 2
-  ) {
+  if (score >= 2) {
 
     confirmation =
       "CONFIRMA";
@@ -1288,9 +861,7 @@ function evaluateSignal(
   }
 
 
-  if (
-    score <= -2
-  ) {
+  if (score <= -2) {
 
     confirmation =
       "CONTRARIA";
@@ -1300,8 +871,7 @@ function evaluateSignal(
 
   return {
 
-    signal:
-      s,
+    signal: s,
 
     confirmation,
 
@@ -1310,9 +880,12 @@ function evaluateSignal(
     reasons,
 
     upcomingHighImpact:
+
       upcoming.filter(
+
         event =>
           event.importance >= 3
+
       ),
 
     recentNews:
@@ -1355,6 +928,7 @@ app.get(
     });
 
   }
+
 );
 
 
@@ -1377,6 +951,7 @@ app.get(
     });
 
   }
+
 );
 
 
@@ -1420,43 +995,170 @@ app.get(
     });
 
   }
+
 );
 
 
 // =====================================================
-// DIAGNOSTICO TEMPORAL
+// DIAGNOSTICO DE LA API ORIGINAL
 // =====================================================
 
 app.get(
-  "/news/raw",
-  (_req, res) => {
+  "/news/api-raw",
+  async (_req, res) => {
 
-    res.json({
+    try {
 
-      ok: true,
+      const url =
+        `${CALENDAR_BASE_URL}/events?country=USA`;
 
-      updatedAt:
-        lastUpdate,
+      const response =
+        await fetch(
+          url,
+          {
+            headers: {
+              Accept: "application/json"
+            }
+          }
+        );
 
-      totalRawEvents:
-        rawCalendar.length,
+      if (!response.ok) {
 
-      totalFilteredEvents:
-        calendar.length,
+        return res.status(
+          response.status
+        ).json({
+          ok: false,
+          status: response.status,
+          error: `Calendar HTTP ${response.status}`
+        });
 
-      events:
-        rawCalendar.slice(
-          0,
-          50
-        ),
+      }
 
-      error:
-        lastError
+      const data =
+        await response.json();
 
-    });
+      const events =
+        unwrap(data);
+
+      res.json({
+        ok: true,
+        source: url,
+        responseType: Array.isArray(data) ? "array" : typeof data,
+        totalEvents: events.length,
+        firstEvents: events.slice(0, 10)
+      });
+
+    } catch (error) {
+
+      res.status(500).json({
+        ok: false,
+        error: error.message
+      });
+
+    }
 
   }
 );
+
+
+// =====================================================
+// ESTADO DE LOS 4 ACTIVOS
+// =====================================================
+
+function assetState(score) {
+
+  if (score > 0) return "FAVORABLE";
+  if (score < 0) return "DESFAVORABLE";
+  return "NEUTRAL";
+
+}
+
+function evaluateAssets() {
+
+  const recent =
+    recentNews().slice(0, 20);
+
+  const scores = {
+    USD: 0,
+    ORO: 0,
+    WTI: 0,
+    BTC: 0
+  };
+
+  const reasons = {
+    USD: [],
+    ORO: [],
+    WTI: [],
+    BTC: []
+  };
+
+  for (const event of recent) {
+
+    const dir =
+      direction(
+        event.event,
+        event.actual,
+        event.forecast
+      );
+
+    if (dir === "UNKNOWN") continue;
+
+    const name =
+      String(event.event || "Noticia").trim();
+
+    if (dir === "USD_BULLISH") {
+
+      scores.USD += 1;
+      scores.ORO -= 1;
+      scores.WTI -= 1;
+      scores.BTC -= 1;
+
+      reasons.USD.push(`${name}: USD fuerte`);
+      reasons.ORO.push(`${name}: presion por USD fuerte`);
+      reasons.WTI.push(`${name}: USD fuerte puede presionar commodities`);
+      reasons.BTC.push(`${name}: USD fuerte / presion sobre riesgo`);
+
+    } else if (dir === "USD_BEARISH") {
+
+      scores.USD -= 1;
+      scores.ORO += 1;
+      scores.WTI += 1;
+      scores.BTC += 1;
+
+      reasons.USD.push(`${name}: USD debil`);
+      reasons.ORO.push(`${name}: apoyo por USD debil`);
+      reasons.WTI.push(`${name}: USD debil puede apoyar commodities`);
+      reasons.BTC.push(`${name}: USD debil / contexto favorable a riesgo`);
+
+    }
+
+  }
+
+  return {
+
+    USD: {
+      state: assetState(scores.USD),
+      reason: reasons.USD[0] || "Sin dato economico reciente suficiente"
+    },
+
+    ORO: {
+      state: assetState(scores.ORO),
+      reason: reasons.ORO[0] || "Sin dato economico reciente suficiente"
+    },
+
+    WTI: {
+      state: assetState(scores.WTI),
+      reason: reasons.WTI[0] || "Sin noticia WTI directa suficiente"
+    },
+
+    BTC: {
+      state: assetState(scores.BTC),
+      reason: reasons.BTC[0] || "Sin dato economico reciente suficiente"
+    }
+
+  };
+
+}
 
 
 // =====================================================
@@ -1468,35 +1170,15 @@ app.get(
   (_req, res) => {
 
     res.json({
-
       ok: true,
-
-      indicator:
-        "Luzifer 5.8",
-
-      updatedAt:
-        lastUpdate,
-
-      assets:
-        evaluateAssets(),
-
-      recent:
-        recentNews()
-          .slice(0, 20),
-
-      upcoming:
-        upcomingNews()
-          .slice(0, 20),
-
-      rawEventCount:
-        rawCalendar.length,
-
-      filteredEventCount:
-        calendar.length,
-
-      error:
-        lastError
-
+      indicator: "Luzifer 5.8",
+      updatedAt: lastUpdate,
+      assets: evaluateAssets(),
+      recent: recentNews().slice(0, 20),
+      upcoming: upcomingNews().slice(0, 20),
+      rawEventCount: rawCalendar.length,
+      filteredEventCount: calendar.length,
+      error: lastError
     });
 
   }
@@ -1537,14 +1219,12 @@ app.post(
       signal,
 
       news:
-        result,
-
-      assets:
-        evaluateAssets()
+        result
 
     });
 
   }
+
 );
 
 
@@ -1554,6 +1234,7 @@ app.post(
 
 app.listen(
   PORT,
+
   async () => {
 
     console.log(
@@ -1565,11 +1246,14 @@ app.listen(
 
 
     setInterval(
+
       fetchCalendar,
+
       Math.max(
         POLL_SECONDS,
         15
       ) * 1000
+
     );
 
   }
