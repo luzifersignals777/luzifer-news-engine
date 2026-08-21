@@ -27,49 +27,49 @@ let lastError = null;
 // =====================================================
 
 const USA_KEYWORDS = [
-  "fomc",
-  "fed",
-  "federal reserve",
-  "interest rate",
-  "cpi",
-  "core cpi",
-  "ppi",
-  "core ppi",
-  "non farm",
-  "nonfarm",
-  "payroll",
-  "unemployment",
-  "jobless",
-  "retail sales",
-  "gdp",
-  "pce",
-  "core pce",
-  "ism",
+  "s&p global composite pmi",
+  "s&p global manufacturing pmi",
+  "s&p global services pmi",
+  "baker hughes us oil rig count",
+  "cftc gold nc net positions",
+  "cftc oil nc net positions",
+  "cftc s&p 500 nc net positions",
+  "3-month bill auction",
+  "6-month bill auction",
+  "adp employment change 4-week average",
+  "redbook index",
+  "housing price index",
+  "case-shiller",
   "consumer confidence",
-  "jolts",
-  "adp",
-  "powell",
-  "fed chair",
-  "treasury",
-  "durable goods",
-  "housing",
-  "existing home sales",
   "new home sales",
-  "initial jobless claims",
+  "richmond fed manufacturing index",
+  "2-year note auction",
+  "api weekly crude oil stock",
+  "mba mortgage applications",
+  "core personal consumption expenditures",
+  "personal consumption expenditures - price index",
+  "personal consumption expenditures prices",
+  "durable goods orders",
+  "gross domestic product",
+  "gdp price index",
+  "nondefense capital goods orders ex aircraft",
+  "personal income",
+  "personal spending",
+  "eia crude oil stocks change",
+  "eia distillate stocks change",
+  "eia gasoline stocks change",
+  "eia heating oil stocks change",
+  "5-year note auction",
+  "jackson hole symposium",
+  "chicago fed national activity index",
   "continuing jobless claims",
-  "pmi",
-  "s&p global",
-  "baker hughes",
-  "cftc",
-  "auction",
-  "api weekly crude",
-  "eia",
-  "jackson hole",
-  "chicago fed",
   "goods trade balance",
+  "initial jobless claims",
   "wholesale inventories",
-  "natural gas",
-  "kansas fed"
+  "eia natural gas storage change",
+  "kansas fed manufacturing activity",
+  "4-week bill auction",
+  "7-year note auction"
 ];
 
 
@@ -700,13 +700,14 @@ async function fetchCalendar() {
       await response.json();
 
 
+    const normalized =
+      unwrap(data).map(normalize);
+
+    rawCalendar = normalized.slice();
+
     const merged =
-      unwrap(data)
-
-        .map(normalize)
-
+      normalized
         .filter(isUSA)
-
         .filter(isRelevant);
 
 
@@ -1256,12 +1257,6 @@ app.get(
       assets:
         evaluateAssets(),
 
-      rawEventCount:
-        rawCalendar.length,
-
-      filteredEventCount:
-        calendar.length,
-
       error:
         lastError
 
@@ -1365,8 +1360,6 @@ app.get(
       assets: evaluateAssets(),
       recent: recentNews().slice(0, 20),
       upcoming: upcomingNews().slice(0, 20),
-      rawEventCount: rawCalendar.length,
-      filteredEventCount: calendar.length,
       error: lastError
     });
   }
