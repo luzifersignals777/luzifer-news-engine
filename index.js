@@ -1,6 +1,8 @@
 import express from "express";
+import { createReutersClient } from "./reuters-client.js";
 
 const app = express();
+const reuters = createReutersClient();
 
 app.use(express.json({ limit: "50kb" }));
 
@@ -1203,13 +1205,33 @@ app.get(
 
       lastUpdate,
 
-      lastError
+      lastError,
+
+      reuters: reuters.status()
 
     });
 
   }
 
 );
+
+
+// =====================================================
+// REUTERS OFICIAL: LECTURA PRIVADA, SIN AUTORIDAD BUY/SELL
+// =====================================================
+
+app.get("/news/reuters/status", (_req, res) => {
+  res.json(reuters.status());
+});
+
+app.get("/news/reuters", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!reuters.authorize(req.headers.authorization)) {
+    return res.status(401).json({ ok: false, error: "REUTERS_READER_AUTH_REQUIRED" });
+  }
+  const snapshot = reuters.snapshot();
+  res.status(snapshot.connected ? 200 : 503).json({ ok: snapshot.connected, ...snapshot });
+});
 
 
 // =====================================================
@@ -1481,6 +1503,7 @@ app.listen(
       `Luzifer USA News Engine listening on ${PORT}`
     );
 
+    reuters.start();
 
     await fetchCalendar();
 
